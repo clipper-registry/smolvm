@@ -235,12 +235,11 @@ jobs:
         env:
           CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
         run: |
-          # Split the churny small-file paths (fingerprints, incremental
-          # session state) into their own tar blobs so warm-run churn
-          # re-uploads megabytes instead of rewriting the small-file monolith.
+          # Split the churny fingerprint dir into its own tar blob so warm-run
+          # churn re-uploads KBs instead of rewriting the whole small-file blob.
+          # split-glob prefixes are literal, so name the target's release dir.
           clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
-            --split-glob '**/.fingerprint/**' \
-            --split-glob '**/incremental/**' \
+            --split-glob '${{ matrix.target }}/release/.fingerprint/**' \
             --split-glob '.rustc_info.json' \
             --cdc
 
@@ -297,8 +296,7 @@ jobs:
           CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
         run: |
           clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
-            --split-glob '**/.fingerprint/**' \
-            --split-glob '**/incremental/**' \
+            --split-glob 'x86_64-pc-windows-gnu/release/.fingerprint/**' \
             --split-glob '.rustc_info.json' \
             --cdc
 
@@ -362,9 +360,11 @@ jobs:
         env:
           CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
         run: |
+          # The agent job builds two musl targets; split each triple's
+          # fingerprint dir (literal prefixes -- no glob metachars allowed).
           clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
-            --split-glob '**/.fingerprint/**' \
-            --split-glob '**/incremental/**' \
+            --split-glob 'x86_64-unknown-linux-musl/release/.fingerprint/**' \
+            --split-glob 'aarch64-unknown-linux-musl/release/.fingerprint/**' \
             --split-glob '.rustc_info.json' \
             --cdc
 
