@@ -1,0 +1,80 @@
+name: Clipper volume cache (mount)
+description: >
+  Lazily mount a clipper volume as the cargo target dir, with branch->main
+  tag fallback. Cold start (no tags exist yet) degrades to a plain directory;
+  the push step seeds the tag either way. Pair with explicit push/unmount
+  steps at the end of the job (composite actions cannot have post steps).
+
+inputs:
+  key:
+    description: Cache lineage key, typically the job name (plus arch for matrices).
+    required: true
+  repo:
+    description: Registry repository holding the cache tags.
+    required: false
+    default: clipper.dev/clipper/smolvm-ci-cache-v2
+
+runs:
+  using: composite
+  steps:
+    - name: Install clipper
+      uses: clipper-registry/setup-clipper@main
+
+    # The Ubuntu git-restore-mtime package (2022.12) drives `git whatchanged`,
+    # which current git refuses to run -- it silently restores nothing. Pin
+    # the upstream script (2025.08, uses `git log --raw`) by commit SHA.
+    - name: Install git-restore-mtime (pinned upstream)
+      shell: bash
+      run: |
+        curl -fsSL -o /usr/local/bin/git-restore-mtime \
+          https://raw.githubusercontent.com/MestreLion/git-tools/b5822d297b3ca4a3b6574e78327a464790b14937/git-restore-mtime
+        echo "8cdae72ea524e7c79c5a61bdfb5004cdab0082074f5fb558f1dba270f91e26b2  /usr/local/bin/git-restore-mtime" | sha256sum -c -
+        chmod +x /usr/local/bin/git-restore-mtime
+
+    # Cargo freshness compares source mtimes against cached artifacts; a
+    # fresh checkout stamps every file with "now", which would silently
+    # invalidate the entire cache. Requires fetch-depth: 0 on the checkout.
+    - name: Restore source mtimes from git history
+      shell: bash
+      run: |
+        git restore-mtime
+        # git-restore-mtime can only date directories from create/delete
+        # events in history; dirs without any keep checkout-fresh mtimes,
+        # which makes cargo's rerun-if-changed=<dir> fire every run. Clamp
+        # dirs still newer than the newest commit to a fixed old date;
+        # genuine membership changes carry commit-dated mtimes and stay
+        # detectable.
+        CUTOFF=$(git log -1 --format=%ct)
+        find . -path ./.git -prune -o -type d -newermt "@$CUTOFF" -print0 |
+          xargs -0 -r touch -d "2000-01-01T00:00:00Z"
+        # VCS-embedding build scripts (vergen, built, smolvm's build.rs, ...)
+        # declare rerun-if-changed=.git/HEAD, whose mtime is checkout-fresh
+        # every run -- the script re-runs and every dependent crate rebuilds
+        # on identical code. Date HEAD (and the current ref) to the head
+        # commit's time: stable across re-runs of a commit, newer than any
+        # prior run's outputs when a real commit lands.
+        touch -d "@$CUTOFF" .git/HEAD || true
+        BRANCH=$(git branch --show-current)
+        if [ -n "$BRANCH" ]; then
+          REF_FILE=$(git rev-parse --git-path "refs/heads/$BRANCH")
+          [ -f "$REF_FILE" ] && touch -d "@$CUTOFF" "$REF_FILE" || true
+        fi
+
+    - name: Mount target cache
+      shell: bash
+      env:
+        CACHE_REPO: ${{ inputs.repo }}
+        CACHE_KEY: ${{ inputs.key }}
+      run: |
+        set -uo pipefail
+        REF="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+        REF="${REF//\//-}"
+        BRANCH_TAG="$CACHE_REPO:$CACHE_KEY-$REF"
+        BASE_TAG="$CACHE_REPO:$CACHE_KEY-main"
+        echo "CLIPPER_CACHE_TAG=$BRANCH_TAG" >> "$GITHUB_ENV"
+        mkdir -p target
+        if clipper volume mount target -j 16 "$BRANCH_TAG" "$BASE_TAG"; then
+          echo "mounted cache (fallback order: $BRANCH_TAG, $BASE_TAG)"
+        else
+          echo "no cache tag found; cold start (push will seed $BRANCH_TAG)"
+        fi

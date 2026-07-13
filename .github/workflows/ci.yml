@@ -148,22 +148,22 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history: the clipper-cache action's git-restore-mtime needs
+          # per-file commit times so cargo doesn't invalidate the whole cache.
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo
-        uses: actions/cache@v5
+      - name: Mount clipper target cache
+        uses: ./.github/actions/clipper-cache
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: linux-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: linux-${{ matrix.arch }}-cargo-
+          key: linux-${{ matrix.arch }}
 
       - name: Install build dependencies
         run: |
@@ -230,6 +230,24 @@ jobs:
       # Note: Full VM integration tests require KVM + real libkrun.
       # Run integration tests locally on a machine with KVM access.
 
+      - name: Push clipper target cache
+        if: always()
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
+        run: |
+          # Split the churny small-file paths (fingerprints, incremental
+          # session state) into their own tar blobs so warm-run churn
+          # re-uploads megabytes instead of rewriting the small-file monolith.
+          clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
+            --split-glob '**/.fingerprint/**' \
+            --split-glob '**/incremental/**' \
+            --split-glob '.rustc_info.json' \
+            --cdc
+
+      - name: Unmount clipper target cache
+        if: always()
+        run: clipper volume unmount target || true
+
   # ==========================================================================
   # Windows Build & Lint (cross-compiled from Linux, mingw-w64 / GNU target)
   # ==========================================================================
@@ -240,22 +258,21 @@ jobs:
       CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history for the clipper-cache action's git-restore-mtime.
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
           targets: x86_64-pc-windows-gnu
 
-      - name: Cache cargo
-        uses: actions/cache@v5
+      - name: Mount clipper target cache
+        uses: ./.github/actions/clipper-cache
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: windows-gnu-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: windows-gnu-cargo-
+          key: windows
 
       - name: Install mingw-w64 cross toolchain
         run: |
@@ -274,6 +291,21 @@ jobs:
       - name: Clippy
         run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -D warnings
 
+      - name: Push clipper target cache
+        if: always()
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
+        run: |
+          clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
+            --split-glob '**/.fingerprint/**' \
+            --split-glob '**/incremental/**' \
+            --split-glob '.rustc_info.json' \
+            --cdc
+
+      - name: Unmount clipper target cache
+        if: always()
+        run: clipper volume unmount target || true
+
   # ==========================================================================
   # Build agent (Linux musl for static binary)
   # ==========================================================================
@@ -282,10 +314,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history for the clipper-cache action's git-restore-mtime.
+          fetch-depth: 0
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-unknown-linux-musl, x86_64-unknown-linux-musl
+
+      - name: Mount clipper target cache
+        uses: ./.github/actions/clipper-cache
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
+        with:
+          key: agent
 
       - name: Install musl tools
         run: |
@@ -314,6 +356,21 @@ jobs:
 
           echo "aarch64 agent:"
           file target/aarch64-unknown-linux-musl/release/smolvm-agent
+
+      - name: Push clipper target cache
+        if: always()
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
+        run: |
+          clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
+            --split-glob '**/.fingerprint/**' \
+            --split-glob '**/incremental/**' \
+            --split-glob '.rustc_info.json' \
+            --cdc
+
+      - name: Unmount clipper target cache
+        if: always()
+        run: clipper volume unmount target || true
 
   # ==========================================================================
   # Summary job for branch protection
