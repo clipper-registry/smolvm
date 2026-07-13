@@ -136,11 +136,7 @@ jobs:
     name: Linux (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     env:
-      # Incremental needs cgu>1 and no fat LTO to pay (one-line edit: ~27s vs
-      # ~348s under [profile.release], which release.yml keeps for shipping).
       CARGO_INCREMENTAL: "1"
-      CARGO_PROFILE_RELEASE_LTO: "false"
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     strategy:
       fail-fast: false
       matrix:
@@ -272,8 +268,6 @@ jobs:
     env:
       CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
       CARGO_INCREMENTAL: "1"
-      CARGO_PROFILE_RELEASE_LTO: "false"
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@v6
 
@@ -339,8 +333,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "1"
-      CARGO_PROFILE_RELEASE_LTO: "false"
-      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@v6
 
