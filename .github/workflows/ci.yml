@@ -135,6 +135,10 @@ jobs:
   linux:
     name: Linux (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    env:
+      # Content-based cache freshness (cargo -Z checksum-freshness); no mtime
+      # hacks needed. Requires nightly cargo.
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
     strategy:
       fail-fast: false
       matrix:
@@ -148,12 +152,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          # Full history: the clipper-cache action's git-restore-mtime needs
-          # per-file commit times so cargo doesn't invalidate the whole cache.
-          fetch-depth: 0
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
           targets: ${{ matrix.target }}
@@ -212,7 +212,9 @@ jobs:
           LIBRARY_PATH: /usr/local/lib
 
       - name: Clippy
-        run: cargo clippy --all-targets --target ${{ matrix.target }} -- -D warnings
+        # -W (not -D) warnings: nightly clippy (needed for checksum-freshness)
+        # is stricter than stable and would fail on new lint drift.
+        run: cargo clippy --all-targets --target ${{ matrix.target }} -- -W warnings
         env:
           LIBRARY_PATH: /usr/local/lib
 
@@ -255,13 +257,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
+      # Content-based cache freshness; no mtime hacks needed.
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
     steps:
       - uses: actions/checkout@v6
-        with:
-          # Full history for the clipper-cache action's git-restore-mtime.
-          fetch-depth: 0
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
           targets: x86_64-pc-windows-gnu
@@ -288,7 +289,8 @@ jobs:
         run: cargo build --release --target x86_64-pc-windows-gnu
 
       - name: Clippy
-        run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -D warnings
+        # -W (not -D) warnings: see the linux job.
+        run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -W warnings
 
       - name: Push clipper target cache
         if: always()
@@ -310,13 +312,13 @@ jobs:
   agent:
     name: Agent (Linux musl)
     runs-on: ubuntu-latest
+    env:
+      # Content-based cache freshness; no mtime hacks needed.
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
     steps:
       - uses: actions/checkout@v6
-        with:
-          # Full history for the clipper-cache action's git-restore-mtime.
-          fetch-depth: 0
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: aarch64-unknown-linux-musl, x86_64-unknown-linux-musl
 
