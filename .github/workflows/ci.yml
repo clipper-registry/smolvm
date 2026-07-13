@@ -158,6 +158,19 @@ jobs:
           components: clippy
           targets: ${{ matrix.target }}
 
+      # Hybrid: actions/cache for the immutable cargo registry (crate index +
+      # downloaded sources), clipper for the large mutable target/ dir. Avoids
+      # re-downloading every crate each run.
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-registry-${{ matrix.arch }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-${{ matrix.arch }}-
+
       - name: Mount clipper target cache
         uses: ./.github/actions/clipper-cache
         env:
@@ -267,6 +280,17 @@ jobs:
           components: clippy
           targets: x86_64-pc-windows-gnu
 
+      # Hybrid: actions/cache for the immutable cargo registry, clipper for target/.
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-registry-windows-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-windows-
+
       - name: Mount clipper target cache
         uses: ./.github/actions/clipper-cache
         env:
@@ -321,6 +345,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: aarch64-unknown-linux-musl, x86_64-unknown-linux-musl
+
+      # Hybrid: actions/cache for the immutable cargo registry, clipper for target/.
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-registry-agent-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-agent-
 
       - name: Mount clipper target cache
         uses: ./.github/actions/clipper-cache
