@@ -136,9 +136,15 @@ jobs:
     name: Linux (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     env:
-      # Content-based cache freshness (cargo -Z checksum-freshness); no mtime
-      # hacks needed. Requires nightly cargo.
-      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
+      # Incremental state is what the clipper cache transports. Fresh-checkout
+      # mtimes make cargo conservatively re-verify the workspace crates, and
+      # incremental makes that cheap: measured on this repo, a one-line edit
+      # costs ~27s under this profile vs ~348s under the ship profile
+      # (fat LTO + cgu=1, incremental off). LTO stays on for real releases
+      # (release.yml); CI check jobs don't ship binaries.
+      CARGO_INCREMENTAL: "1"
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     strategy:
       fail-fast: false
       matrix:
@@ -153,7 +159,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
           targets: ${{ matrix.target }}
@@ -225,9 +231,7 @@ jobs:
           LIBRARY_PATH: /usr/local/lib
 
       - name: Clippy
-        # -W (not -D) warnings: nightly clippy (needed for checksum-freshness)
-        # is stricter than stable and would fail on new lint drift.
-        run: cargo clippy --all-targets --target ${{ matrix.target }} -- -W warnings
+        run: cargo clippy --all-targets --target ${{ matrix.target }} -- -D warnings
         env:
           LIBRARY_PATH: /usr/local/lib
 
@@ -255,6 +259,9 @@ jobs:
           # split-glob prefixes are literal, so name the target's release dir.
           clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
             --split-glob '${{ matrix.target }}/release/.fingerprint/**' \
+            --split-glob '${{ matrix.target }}/release/incremental/**' \
+            --split-glob '${{ matrix.target }}/debug/.fingerprint/**' \
+            --split-glob '${{ matrix.target }}/debug/incremental/**' \
             --split-glob '.rustc_info.json' \
             --cdc
 
@@ -270,12 +277,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
-      # Content-based cache freshness; no mtime hacks needed.
-      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
+      # Incremental cache profile (see the linux job).
+      CARGO_INCREMENTAL: "1"
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
           targets: x86_64-pc-windows-gnu
@@ -313,8 +322,7 @@ jobs:
         run: cargo build --release --target x86_64-pc-windows-gnu
 
       - name: Clippy
-        # -W (not -D) warnings: see the linux job.
-        run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -W warnings
+        run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -D warnings
 
       - name: Push clipper target cache
         if: always()
@@ -323,6 +331,7 @@ jobs:
         run: |
           clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
             --split-glob 'x86_64-pc-windows-gnu/release/.fingerprint/**' \
+            --split-glob 'x86_64-pc-windows-gnu/release/incremental/**' \
             --split-glob '.rustc_info.json' \
             --cdc
 
@@ -337,12 +346,14 @@ jobs:
     name: Agent (Linux musl)
     runs-on: ubuntu-latest
     env:
-      # Content-based cache freshness; no mtime hacks needed.
-      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
+      # Incremental cache profile (see the linux job).
+      CARGO_INCREMENTAL: "1"
+      CARGO_PROFILE_RELEASE_LTO: "false"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-unknown-linux-musl, x86_64-unknown-linux-musl
 
@@ -401,7 +412,9 @@ jobs:
           # fingerprint dir (literal prefixes -- no glob metachars allowed).
           clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
             --split-glob 'x86_64-unknown-linux-musl/release/.fingerprint/**' \
+            --split-glob 'x86_64-unknown-linux-musl/release/incremental/**' \
             --split-glob 'aarch64-unknown-linux-musl/release/.fingerprint/**' \
+            --split-glob 'aarch64-unknown-linux-musl/release/incremental/**' \
             --split-glob '.rustc_info.json' \
             --cdc
 

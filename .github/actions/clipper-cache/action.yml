@@ -5,10 +5,11 @@ description: >
   the push step seeds the tag either way. Pair with explicit push/unmount
   steps at the end of the job (composite actions cannot have post steps).
 
-  No mtime restoration: the build uses cargo -Z checksum-freshness (content
-  hashing), which ignores source mtimes entirely. A fresh checkout reuses the
-  cache correctly because content is compared, not mtimes -- and build scripts
-  stay safe, since fresh "now" mtimes make them re-run rather than wrongly skip.
+  No mtime games: a fresh checkout's "now" mtimes make cargo conservatively
+  re-verify the workspace crates (registry deps are content-fingerprinted and
+  unaffected), and CARGO_INCREMENTAL=1 on the jobs makes that re-verification
+  cheap. Conservative-and-incremental is both correct (no stale reuse in any
+  direction) and fast; the cache's job is transporting the incremental state.
 
 inputs:
   key:
