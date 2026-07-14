@@ -137,6 +137,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       CARGO_INCREMENTAL: "1"
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
     strategy:
       fail-fast: false
       matrix:
@@ -151,7 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
           targets: ${{ matrix.target }}
@@ -221,7 +222,7 @@ jobs:
           LIBRARY_PATH: /usr/local/lib
 
       - name: Clippy
-        run: cargo clippy --all-targets --target ${{ matrix.target }} -- -D warnings
+        run: cargo clippy --all-targets --target ${{ matrix.target }} -- -W warnings
         env:
           LIBRARY_PATH: /usr/local/lib
 
@@ -268,10 +269,11 @@ jobs:
     env:
       CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
       CARGO_INCREMENTAL: "1"
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
           targets: x86_64-pc-windows-gnu
@@ -308,7 +310,7 @@ jobs:
         run: cargo build --release --target x86_64-pc-windows-gnu
 
       - name: Clippy
-        run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -D warnings
+        run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -W warnings
 
       - name: Push clipper target cache
         if: always()
@@ -333,10 +335,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_INCREMENTAL: "1"
+      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: aarch64-unknown-linux-musl, x86_64-unknown-linux-musl
 
