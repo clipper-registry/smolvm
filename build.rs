@@ -86,6 +86,11 @@ fn main() {
 
         #[cfg(target_os = "macos")]
         link_libkrun();
+    } else {
+        // Non-macOS targets need nothing from this script, but with no
+        // directive cargo falls back to a whole-package mtime scan, which
+        // re-dirties the crate on every fresh checkout.
+        println!("cargo:rerun-if-changed=build.rs");
     }
 }
 
