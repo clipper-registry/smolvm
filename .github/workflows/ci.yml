@@ -138,6 +138,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: "1"
       CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
+      RUSTUP_TOOLCHAIN: nightly-2026-07-13
     strategy:
       fail-fast: false
       matrix:
@@ -152,8 +153,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-07-13
           components: clippy
           targets: ${{ matrix.target }}
 
@@ -270,6 +272,7 @@ jobs:
       CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
       CARGO_INCREMENTAL: "1"
       CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
+      RUSTUP_TOOLCHAIN: nightly-2026-07-13
     steps:
       - uses: actions/checkout@v6
 
@@ -337,6 +340,7 @@ jobs:
     env:
       CARGO_INCREMENTAL: "1"
       CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
+      RUSTUP_TOOLCHAIN: nightly-2026-07-13
     steps:
       - uses: actions/checkout@v6
 
