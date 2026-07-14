@@ -15,34 +15,25 @@ pub mod proto;
 /// Shared-memory command/completion rings (low-latency in-VM transport).
 pub mod ring;
 
-/// Fingerprint of the wire-defining source. The client sends it in the
-/// `Init` handshake; the host rejects a mismatch, turning a stale shim/server
-/// pairing into a loud error instead of silent data corruption.
-///
-/// FNV-1a over the files both the client (shim) and host (server) compile,
-/// i.e. the wire contract. Computed via `include_bytes!` at compile time so
-/// the inputs are ordinary tracked deps and no build script re-run can
-/// cascade rebuilds.
+/// Fingerprint of the wire-defining source (see `build.rs`). The client sends
+/// it in the `Init` handshake; the host rejects a mismatch, turning a stale
+/// shim/server pairing into a loud error instead of silent data corruption.
 pub const PROTO_HASH: u64 = {
-    // A manual epoch to force a bump on wire changes the file set misses.
-    let mut h = fnv1a(0xcbf2_9ce4_8422_2325, b"epoch-1");
-    h = fnv1a(h, include_bytes!("proto.rs"));
-    h = fnv1a(h, include_bytes!("client.rs"));
-    h = fnv1a(h, include_bytes!("ring.rs"));
-    h = fnv1a(h, include_bytes!("generated/cublas_guest.rs"));
-    h = fnv1a(h, include_bytes!("generated/cudnn_guest.rs"));
-    h
-};
-
-const fn fnv1a(mut h: u64, bytes: &[u8]) -> u64 {
+    // env! gives the hex string from build.rs; parse it at compile time.
+    let s = env!("SMOLVM_PROTO_HASH").as_bytes();
+    let mut v = 0u64;
     let mut i = 0;
-    while i < bytes.len() {
-        h ^= bytes[i] as u64;
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    while i < s.len() {
+        let d = match s[i] {
+            b'0'..=b'9' => s[i] - b'0',
+            b'a'..=b'f' => s[i] - b'a' + 10,
+            _ => 0,
+        };
+        v = v * 16 + d as u64;
         i += 1;
     }
-    h
-}
+    v
+};
 
 /// Shared-memory bulk-data channel (zero-copy memcpy). Linux-only.
 #[cfg(target_os = "linux")]
