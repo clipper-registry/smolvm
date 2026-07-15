@@ -135,6 +135,8 @@ jobs:
   linux:
     name: Linux (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    env:
+      RUSTUP_TOOLCHAIN: nightly-2026-07-13
     strategy:
       fail-fast: false
       matrix:
@@ -149,21 +151,30 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-07-13
           components: clippy
           targets: ${{ matrix.target }}
 
-      - name: Cache cargo
+      # actions/cache for the immutable registry; clipper carries target/.
+      - name: Cache cargo registry
         uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
-          key: linux-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: linux-${{ matrix.arch }}-cargo-
+          key: cargo-registry-${{ matrix.arch }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-${{ matrix.arch }}-
+
+      - name: Mount clipper target cache
+        uses: clipper-registry/cache/rust@main
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
+        with:
+          repo: clipper.dev/clipper/smolvm-ci-cache-v3
+          key: linux-${{ matrix.arch }}
 
       - name: Install build dependencies
         run: |
@@ -212,7 +223,7 @@ jobs:
           LIBRARY_PATH: /usr/local/lib
 
       - name: Clippy
-        run: cargo clippy --all-targets --target ${{ matrix.target }} -- -D warnings
+        run: cargo clippy --all-targets --target ${{ matrix.target }} -- -W warnings
         env:
           LIBRARY_PATH: /usr/local/lib
 
@@ -238,24 +249,33 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
+      RUSTUP_TOOLCHAIN: nightly-2026-07-13
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-07-13
           components: clippy
           targets: x86_64-pc-windows-gnu
 
-      - name: Cache cargo
+      - name: Cache cargo registry
         uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
-          key: windows-gnu-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: windows-gnu-cargo-
+          key: cargo-registry-windows-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-windows-
+
+      - name: Mount clipper target cache
+        uses: clipper-registry/cache/rust@main
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
+        with:
+          repo: clipper.dev/clipper/smolvm-ci-cache-v3
+          key: windows
 
       - name: Install mingw-w64 cross toolchain
         run: |
@@ -272,7 +292,7 @@ jobs:
         run: cargo build --release --target x86_64-pc-windows-gnu
 
       - name: Clippy
-        run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -D warnings
+        run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -W warnings
 
   # ==========================================================================
   # Build agent (Linux musl for static binary)
@@ -280,12 +300,33 @@ jobs:
   agent:
     name: Agent (Linux musl)
     runs-on: ubuntu-latest
+    env:
+      RUSTUP_TOOLCHAIN: nightly-2026-07-13
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-07-13
           targets: aarch64-unknown-linux-musl, x86_64-unknown-linux-musl
+
+      - name: Cache cargo registry
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-registry-agent-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-agent-
+
+      - name: Mount clipper target cache
+        uses: clipper-registry/cache/rust@main
+        env:
+          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
+        with:
+          repo: clipper.dev/clipper/smolvm-ci-cache-v3
+          key: agent
 
       - name: Install musl tools
         run: |

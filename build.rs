@@ -65,6 +65,14 @@ fn main() {
     // Linux (zigbuild) must NOT emit macOS-only linker args (-sectcreate,
     // -weak-lkrun) — gate every emission on the actual compile target.
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    // These envs select the linking mode and are this script's only inputs.
+    // They must be the script's ONLY rerun-if directives: path-based ones
+    // (even build.rs itself) are mtime-checked, and a fresh CI checkout makes
+    // every path "newer", re-running the script and dirtying the whole crate.
+    println!("cargo:rerun-if-env-changed=LIBKRUN_STATIC");
+    println!("cargo:rerun-if-env-changed=LIBKRUN_BUNDLE");
+    println!("cargo:rerun-if-env-changed=LIBKRUN_DIR");
+    println!("cargo:rerun-if-env-changed=LIBKRUN_BUILD");
     if target_os == "macos" {
         // On macOS, create a placeholder __SMOLVM,__smolvm Mach-O section.
         // This section is replaced with real data by `smolvm pack --single-file`.
@@ -91,11 +99,6 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn link_libkrun() {
-    println!("cargo:rerun-if-env-changed=LIBKRUN_STATIC");
-    println!("cargo:rerun-if-env-changed=LIBKRUN_BUNDLE");
-    println!("cargo:rerun-if-env-changed=LIBKRUN_DIR");
-    println!("cargo:rerun-if-env-changed=LIBKRUN_BUILD");
-
     // Option 0: Build from submodule
     if std::env::var("LIBKRUN_BUILD").is_ok() {
         if let Some(lib_path) = build_libkrun_from_submodule() {
