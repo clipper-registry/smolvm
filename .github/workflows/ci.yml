@@ -136,8 +136,6 @@ jobs:
     name: Linux (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     env:
-      CARGO_INCREMENTAL: "1"
-      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
       RUSTUP_TOOLCHAIN: nightly-2026-07-13
     strategy:
       fail-fast: false
@@ -171,10 +169,11 @@ jobs:
           restore-keys: cargo-registry-${{ matrix.arch }}-
 
       - name: Mount clipper target cache
-        uses: ./.github/actions/clipper-cache
+        uses: clipper-registry/cache/rust@main
         env:
           CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
         with:
+          repo: clipper.dev/clipper/smolvm-ci-cache-v3
           key: linux-${{ matrix.arch }}
 
       - name: Install build dependencies
@@ -242,26 +241,6 @@ jobs:
       # Note: Full VM integration tests require KVM + real libkrun.
       # Run integration tests locally on a machine with KVM access.
 
-      - name: Push clipper target cache
-        if: always()
-        env:
-          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
-        run: |
-          # Split the churny fingerprint dir into its own tar blob so warm-run
-          # churn re-uploads KBs instead of rewriting the whole small-file blob.
-          # split-glob prefixes are literal, so name the target's release dir.
-          clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
-            --split-glob '${{ matrix.target }}/release/.fingerprint/**' \
-            --split-glob '${{ matrix.target }}/release/incremental/**' \
-            --split-glob '${{ matrix.target }}/debug/.fingerprint/**' \
-            --split-glob '${{ matrix.target }}/debug/incremental/**' \
-            --split-glob '.rustc_info.json' \
-            --cdc
-
-      - name: Unmount clipper target cache
-        if: always()
-        run: clipper volume unmount target || true
-
   # ==========================================================================
   # Windows Build & Lint (cross-compiled from Linux, mingw-w64 / GNU target)
   # ==========================================================================
@@ -270,8 +249,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
-      CARGO_INCREMENTAL: "1"
-      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
       RUSTUP_TOOLCHAIN: nightly-2026-07-13
     steps:
       - uses: actions/checkout@v6
@@ -293,10 +270,11 @@ jobs:
           restore-keys: cargo-registry-windows-
 
       - name: Mount clipper target cache
-        uses: ./.github/actions/clipper-cache
+        uses: clipper-registry/cache/rust@main
         env:
           CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
         with:
+          repo: clipper.dev/clipper/smolvm-ci-cache-v3
           key: windows
 
       - name: Install mingw-w64 cross toolchain
@@ -316,21 +294,6 @@ jobs:
       - name: Clippy
         run: cargo clippy --release --target x86_64-pc-windows-gnu --all-targets -- -W warnings
 
-      - name: Push clipper target cache
-        if: always()
-        env:
-          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
-        run: |
-          clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
-            --split-glob 'x86_64-pc-windows-gnu/release/.fingerprint/**' \
-            --split-glob 'x86_64-pc-windows-gnu/release/incremental/**' \
-            --split-glob '.rustc_info.json' \
-            --cdc
-
-      - name: Unmount clipper target cache
-        if: always()
-        run: clipper volume unmount target || true
-
   # ==========================================================================
   # Build agent (Linux musl for static binary)
   # ==========================================================================
@@ -338,8 +301,6 @@ jobs:
     name: Agent (Linux musl)
     runs-on: ubuntu-latest
     env:
-      CARGO_INCREMENTAL: "1"
-      CARGO_UNSTABLE_CHECKSUM_FRESHNESS: "true"
       RUSTUP_TOOLCHAIN: nightly-2026-07-13
     steps:
       - uses: actions/checkout@v6
@@ -360,10 +321,11 @@ jobs:
           restore-keys: cargo-registry-agent-
 
       - name: Mount clipper target cache
-        uses: ./.github/actions/clipper-cache
+        uses: clipper-registry/cache/rust@main
         env:
           CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
         with:
+          repo: clipper.dev/clipper/smolvm-ci-cache-v3
           key: agent
 
       - name: Install musl tools
@@ -393,25 +355,6 @@ jobs:
 
           echo "aarch64 agent:"
           file target/aarch64-unknown-linux-musl/release/smolvm-agent
-
-      - name: Push clipper target cache
-        if: always()
-        env:
-          CLIPPER_CREDENTIALS: ${{ secrets.CLIPPER_CI_CREDENTIALS }}
-        run: |
-          # The agent job builds two musl targets; split each triple's
-          # fingerprint dir (literal prefixes -- no glob metachars allowed).
-          clipper volume push target "$CLIPPER_CACHE_TAG" -j 16 \
-            --split-glob 'x86_64-unknown-linux-musl/release/.fingerprint/**' \
-            --split-glob 'x86_64-unknown-linux-musl/release/incremental/**' \
-            --split-glob 'aarch64-unknown-linux-musl/release/.fingerprint/**' \
-            --split-glob 'aarch64-unknown-linux-musl/release/incremental/**' \
-            --split-glob '.rustc_info.json' \
-            --cdc
-
-      - name: Unmount clipper target cache
-        if: always()
-        run: clipper volume unmount target || true
 
   # ==========================================================================
   # Summary job for branch protection
